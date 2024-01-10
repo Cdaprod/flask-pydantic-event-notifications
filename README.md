@@ -15,7 +15,10 @@ mc admin config set myminio notify_webhook:1 endpoint="http://host.docker.intern
 
 Successfully applied new settings.
 Please restart your server 'mc admin service restart myminio'.
-➜  ~ mc admin service restart myminio
+
+---
+
+mc admin service restart myminio
 Restart command successfully sent to `myminio`. Type Ctrl-C to quit or wait to follow the status of the restart process....
 Restarted `myminio` successfully in 1 seconds
 
