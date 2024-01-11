@@ -70,6 +70,21 @@ app = Flask(__name__)
 @app.route('/hello', methods=['GET'])
 def hello_minio():
     return "Hello MinIO!"
+    
+@app.route('/minio-webhook', methods=['POST'])
+def log_minio_event():
+    # Get JSON data sent by MinIO
+    event_data = request.json
+
+    # Convert the data to a formatted string for better readability
+    formatted_data = json.dumps(event_data, indent=4)
+    print("Received Event Data:", formatted_data)
+
+    # For debugging purposes, you can also write to a file
+    with open('minio_events.log', 'a') as log_file:
+        log_file.write(formatted_data + '\n')
+
+    return "Event logged", 200
 
 # Route for handling MinIO events
 @app.route('/event', methods=['POST'])
@@ -94,8 +109,8 @@ def process_event(event: MinioEventData):
     # Insert event data into PostgreSQL
     try:
         with pg_conn.cursor() as cur:
-            cur.execute("INSERT INTO events (event_name, bucket_name, object_key, size, eTag, sequencer, data) VALUES (%s, %s, %s, %s, %s, %s, %s)", 
-                        (event.event_name, event.bucket_name, event.object_key, event.size, event.eTag, event.sequencer, json_data))
+            cur.execute("INSERT INTO bucket_events (event_name, bucket_name, object_key, sequencer, data) VALUES (%s, %s, %s, %s, %s)", 
+                        (event.event_name, event.bucket_name, event.object_key, event.sequencer, json_data))
             pg_conn.commit()
     except Exception as e:
         pg_conn.rollback()
