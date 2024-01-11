@@ -1,6 +1,5 @@
 # flask-pydantic-event-notifications
 
-
 # Setup MC Commands for Python Webhook 
 ---
 
