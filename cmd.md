@@ -26,3 +26,9 @@ curl -X POST http://localhost:5000/event \
     ]
 }'
 ```
+
+# Mc to MinIO for Configuring
+
+```md
+
+```
