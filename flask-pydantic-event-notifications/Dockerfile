@@ -1,4 +1,5 @@
-# Copy the current directory contents into the container at /usr/src/app
+FROM python:3.8 
+
 COPY ./app .
 
 # Install any needed packages specified in requirements.txt
