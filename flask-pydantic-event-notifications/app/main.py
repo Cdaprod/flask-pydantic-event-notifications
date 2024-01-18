@@ -112,36 +112,44 @@ pg_conn = psycopg2.connect(
 # Flask app initialization
 app = Flask(__name__)
 
-# Route for handling MinIO events without Py
 @app.route('/minio-event', methods=['POST'])
 def handle_minio_event():
     event_data = request.json
     try:
-        event = Event.parse_obj(raw_event_data)
-        with pg_conn.cursor() as cur:
-            for record in event.Records:
-                object_key = record.s3.object.key
-                json_data = json.dumps(record.dict())
+        # Parse the event data using Pydantic
+        event = Event.parse_obj(event_data)
 
-                cur.execute("""
-                    INSERT INTO events (key, value) 
-                    VALUES (%s, %s)
-                    ON CONFLICT (key) 
-                    DO UPDATE SET value = EXCLUDED.value;
-                    """, (object_key, json_data))
-            pg_conn.commit()
- 
+        # Open a new database connection
+        with psycopg2.connect(
+            host=postgres_config.host,
+            port=postgres_config.port,
+            user=postgres_config.user,
+            password=postgres_config.password,
+            dbname=postgres_config.database
+        ) as pg_conn:
+
+            with pg_conn.cursor() as cur:
+                for record in event.Records:
+                    object_key = record.s3.object.key
+                    json_data = json.dumps(record.dict())
+
+                    cur.execute("""
+                        INSERT INTO events (key, value) 
+                        VALUES (%s, %s)
+                        ON CONFLICT (key) 
+                        DO UPDATE SET value = EXCLUDED.value;
+                        """, (object_key, json_data))
+                # Commit is automatic due to the context manager
+
+        return "Event processed", 200
+
     except ValidationError as e:
         print(f"Validation error: {e}")
         return "Invalid event data", 400
     except Exception as e:
         print(f"Error: {e}")
-        pg_conn.rollback()
+        # No need to explicitly roll back, it's handled by the context manager
         return "Internal server error", 500
-    finally:
-        pg_conn.close()
-
-    return "Event processed", 200
 
 @app.route('/hello', methods=['GET'])
 def hello():
