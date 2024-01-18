@@ -1,10 +1,8 @@
 import json
 import psycopg2
-from typing import List, Dict, Any, Optional
 from flask import Flask, jsonify, request
 from minio import Minio
 from pydantic import BaseModel, ValidationError
-
 
 
 # Pydantic configuration class for MinIO client
@@ -21,62 +19,6 @@ class PostgresClientConfig(BaseModel):
     user: str
     password: str
     database: str
-
-class OwnerIdentity(BaseModel):
-    principalId: str
-
-class Bucket(BaseModel):
-    arn: str
-    name: str
-    ownerIdentity: OwnerIdentity
-
-class UserMetadata(BaseModel):
-    content_type: str
-
-class Object(BaseModel):
-    key: str
-    eTag: str
-    size: int
-    sequencer: str
-    contentType: str
-    userMetadata: UserMetadata
-
-class S3(BaseModel):
-    bucket: Bucket
-    object: Object
-    configurationId: str
-    s3SchemaVersion: str
-
-class Source(BaseModel):
-    host: str
-    port: Optional[str]
-    userAgent: str
-
-class ResponseElements(BaseModel):
-    x_amz_id_2: str
-    x_amz_request_id: str
-    x_minio_deployment_id: str
-    x_minio_origin_endpoint: str
-
-class RequestParameters(BaseModel):
-    region: Optional[str]
-    principalId: str
-    sourceIPAddress: str
-
-class Record(BaseModel):
-    s3: S3
-    source: Source
-    awsRegion: Optional[str]
-    eventName: str
-    eventTime: str
-    eventSource: str
-    eventVersion: str
-    userIdentity: OwnerIdentity
-    responseElements: ResponseElements
-    requestParameters: RequestParameters
-
-class Event(BaseModel):
-    Records: List[Record]
 
 # Initialize configuration instances
 minio_config = MinioClientConfig(
@@ -117,27 +59,28 @@ app = Flask(__name__)
 def handle_minio_event():
     event_data = request.json
     try:
-        event = Event.parse_obj(raw_event_data)
         with pg_conn.cursor() as cur:
-            for record in event.Records:
-                object_key = record.s3.object.key
-                json_data = json.dumps(record.dict())
+            for record in event_data['Records']:
+                try:
+                    # Extract object key directly from record
+                    object_key = record['s3']['object']['key']
+                except KeyError as e:
+                    print(f"Key error: {e}")
+                    continue
+
+                # Store the entire record as JSON
+                json_data = json.dumps(record)
 
                 cur.execute("""
-                    INSERT INTO events (key, value) 
+                    INSERT INTO minio_events (key, value) 
                     VALUES (%s, %s)
                     ON CONFLICT (key) 
                     DO UPDATE SET value = EXCLUDED.value;
                     """, (object_key, json_data))
             pg_conn.commit()
- 
-    except ValidationError as e:
-        print(f"Validation error: {e}")
-        return "Invalid event data", 400
     except Exception as e:
         print(f"Error: {e}")
         pg_conn.rollback()
-        return "Internal server error", 500
     finally:
         pg_conn.close()
 
